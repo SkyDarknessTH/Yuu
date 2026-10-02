@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="th"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>AI Time-lapse Auto Alignment Studio</title>
+<style>
+:root{--bg:#0a0f14;--pn:#111a22;--ln:#243543;--tx:#d6e2ea;--mu:#7f95a5;--ac:#ffb347;--ok:#5fd38d;--wn:#ffd166;--rv:#6cb8ff;--bd:#ff6b6b;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+:root:not([data-theme=dark]){}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font-family:'Chakra Petch',system-ui,sans-serif;line-height:1.5;background-image:linear-gradient(var(--ln) 1px,transparent 1px),linear-gradient(90deg,var(--ln) 1px,transparent 1px);background-size:48px 48px;background-attachment:fixed}
+main{max-width:980px;margin:0 auto;padding:14px}
+h1{font-size:1.5rem;margin:6px 0 2px;letter-spacing:.02em}h1 b{color:var(--ac)}
+h2{font-size:1.05rem;margin:0 0 10px;color:var(--ac)}
+p.s{color:var(--mu);margin:0 0 12px;font-size:.9rem}
+section{background:var(--pn);border:1px solid var(--ln);border-left:3px solid var(--ac);padding:14px;margin:12px 0}
+button,select,input{font:inherit;color:var(--tx);background:#0d151c;border:1px solid var(--ln);padding:8px 12px;border-radius:2px}
+button{cursor:pointer;background:#16232d}button:hover{border-color:var(--ac)}button.p{background:var(--ac);color:#1a1000;border-color:var(--ac);font-weight:700}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px}
+.stats div{border:1px solid var(--ln);padding:8px;background:#0d151c}.stats b{display:block;font-size:1.4rem;color:var(--ac)}.stats span{color:var(--mu);font-size:.8rem}
+#drop{border:1px dashed var(--mu);padding:26px;text-align:center;color:var(--mu)}#drop.on{border-color:var(--ac);color:var(--ac)}
+.track{height:6px;background:#0d151c;border:1px solid var(--ln)}#bar{height:100%;width:0;background:var(--ac)}
+#log{color:var(--mu);font-size:.85rem;margin-top:6px;min-height:1.3em}
+.day{display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--ln)}.day>span{width:92px;flex:none;font-size:.82rem;color:var(--mu)}
+.th{display:flex;gap:6px;overflow-x:auto;max-width:100%}.th figure{margin:0;flex:none;position:relative;border:2px solid transparent;cursor:pointer}.th figure.sel{border-color:var(--ac)}.th img,.th canvas{display:block;height:58px;width:auto}
+.th figcaption{position:absolute;right:0;bottom:0;background:#000b;font-size:.7rem;padding:0 4px}
+.empty{color:var(--bd);font-size:.8rem}
+canvas#cmp{width:100%;max-height:60vh;object-fit:contain;background:#000;border:1px solid var(--ln)}
+.chips{display:flex;flex-wrap:wrap;gap:4px}.chip{padding:3px 7px;font-size:.75rem;border:1px solid var(--ln);cursor:pointer}.chip.cur{outline:2px solid var(--ac)}
+.PASS,.REF{color:var(--ok)}.WARNING{color:var(--wn)}.REVIEW{color:var(--rv)}.REJECT{color:var(--bd)}
+input[type=range]{width:100%;padding:0}label{font-size:.85rem;color:var(--mu)}
+.note{border-left:3px solid var(--wn);padding:6px 10px;background:#1b1a10;font-size:.82rem;color:#e8d9a0;margin:8px 0}
+</style></head><body><main>
+<h1>AI Time-lapse <b>Auto Alignment</b> Studio</h1>
+<p class="s">ประมวลผลในเครื่องของคุณทั้งหมด ไม่มีการอัปโหลดภาพไปเซิร์ฟเวอร์</p>
+<div class="stats" id="stats"></div>
+<div style="position:sticky;top:env(safe-area-inset-top,0px);background:var(--bg);padding:6px 0;z-index:5"><div class="track"><div id="bar"></div></div><div id="log">พร้อมใช้งาน</div></div>
+
+<section><h2>1. นำเข้า ZIP</h2>
+<div id="drop">ลากไฟล์ ZIP มาวางที่นี่ หรือแตะเพื่อเลือกหลายไฟล์</div>
+<input id="zf" type="file" accept=".zip" multiple hidden>
+<div class="row"><label><input type="checkbox" id="auto" checked> จัดแนวอัตโนมัติทันทีหลังนำเข้า (ยึดภาพที่ถ่ายก่อนสุดเป็นต้นแบบ)</label></div><div class="row"><button id="rs0">กู้คืนโครงการที่บันทึกไว้</button><button id="clr">ล้างข้อมูลโครงการ</button></div></section>
+
+<section><h2>2. คัดเลือกภาพรายวัน</h2>
+<p class="s">ระบบเลือกภาพที่ชัดที่สุดของแต่ละวัน (กรอบสีส้ม) แตะรูปย่อเพื่อเปลี่ยนภาพ ตัวเลขคือคะแนนคุณภาพ 0–100</p>
+<div class="row"><label>จำนวนภาพต่อวัน <select id="perday"><option value="1">1 ภาพ/วัน</option><option value="n">ทุกภาพ</option></select></label>
+<label>ภาพอ้างอิง <select id="refsel"></select></label></div>
+<div id="days"></div></section>
+
+<section><h2>3. จัดแนวอัตโนมัติ</h2>
+<p class="s">ORB → Homography (RANSAC) → ECC ปรับละเอียด; ถ้าจับคู่กับภาพแรกไม่ได้ จะลองใช้ภาพก่อนหน้าช่วย แล้วตรวจกับภาพแรกเสมอ สำรองด้วย ECC หลายสเกล</p>
+<div class="row"><label><input type="checkbox" id="rl"> ล็อกเฉพาะบริเวณที่เลือก (เช่น ตัวบ้าน)</label><label>แบบ <select id="rm"><option value="s">เลื่อน+หมุน+ย่อขยาย (เสถียร)</option><option value="h">Perspective (ตรงเฉพาะในกรอบ)</option></select></label><button id="rc">ล้างกรอบ</button></div>
+<p class="s">ลากบนภาพอ้างอิงเพื่อวาดกรอบรอบตัวบ้าน/อาคารหลัก (วาดได้หลายกรอบ) เลี่ยงท้องฟ้า ต้นไม้ รถ คน แล้วกด "เริ่มจัดแนว" ใหม่ (โหมดนี้ไม่ใช้ Worker)</p>
+<canvas id="roi" width="640" height="360" style="width:100%;max-height:50vh;object-fit:contain;touch-action:none;background:#000;border:1px solid var(--ln)"></canvas>
+<div class="row"><button class="p" id="go">เริ่มจัดแนว</button><button id="pa">พัก</button><button id="ca">ยกเลิก</button><button id="rt">ทำต่อ / ลองใหม่ (ข้ามภาพที่เสร็จแล้ว)</button><label><input type="checkbox" id="wk"> ใช้ Web Worker (ทดลอง)</label></div>
+<div class="note">คะแนนความเชื่อมั่นเป็นเพียงตัวช่วยประเมิน ไม่ใช่การรับประกันความถูกต้อง ภาพที่มี Parallax หรือวัตถุเคลื่อนที่ควรตรวจด้วยตา</div></section>
+
+<section><h2>4. ตรวจสอบและ Crop</h2>
+<div class="row"><label>Crop <select id="cm"><option value="c">Conservative</option><option value="b" selected>Balanced</option><option value="m">Maximum FOV</option></select></label>
+<label>มุมมอง <select id="vm"><option value="s">Slider ก่อน/หลัง</option><option value="o">Overlay</option><option value="k">Blink</option></select></label>
+<label><input type="checkbox" id="usecrop" checked> แสดงกรอบ Crop</label></div>
+<canvas id="cmp" width="960" height="540"></canvas>
+<input type="range" id="sl" min="0" max="100" value="50" aria-label="ตำแหน่ง Slider / ความทึบ">
+<div id="info" style="margin:6px 0;font-size:.85rem"></div>
+<div class="chips" id="chips"></div>
+<div class="row"><label>เลื่อน X <input type="range" id="mx" min="-0.1" max="0.1" step="0.001" value="0"></label>
+<label>เลื่อน Y <input type="range" id="my" min="-0.1" max="0.1" step="0.001" value="0"></label>
+<label>หมุน° <input type="range" id="mr" min="-5" max="5" step="0.05" value="0"></label>
+<label>ซูม <input type="range" id="mz" min="0.9" max="1.1" step="0.001" value="1"></label>
+<button id="mrst">รีเซ็ตภาพนี้</button><button id="mrj">ตัดภาพนี้ออก</button></div></section>
+
+<section><h2>5. ส่งออก</h2>
+<div class="row">
+<label>ความละเอียด <select id="rs"><option value="720">720p</option><option value="1080" selected>1080p</option><option value="1440">2K</option><option value="2160">4K</option></select></label>
+<label>FPS <select id="fps"><option>10</option><option selected>15</option><option>24</option><option>30</option><option>60</option></select></label>
+<label>บิตเรต <select id="br"><option value="4">4 Mbps</option><option value="8" selected>8 Mbps</option><option value="16">16 Mbps</option></select></label>
+<label>ค้างต่อเฟรม <input id="hold" type="number" min="1" max="30" value="1" style="width:64px"></label></div>
+<div class="row"><label>เริ่ม <input type="date" id="d0"></label><label>สิ้นสุด <input type="date" id="d1"></label>
+<label><input type="checkbox" id="sd" checked> แสดงวันที่</label><label>หัวเรื่อง <input id="tt" placeholder="ไม่บังคับ"></label></div>
+<div class="row"><button class="p" id="vid">สร้างวิดีโอ</button><button id="zip">ส่งออกภาพที่จัดแนวเป็น ZIP</button></div>
+<div class="row"><button id="rdm">ดาวน์โหลด README.md</button></div><div id="out"></div>
+<div class="note">ข้อจำกัด iOS Safari: การประมวลผลจะหยุดเมื่อพักแอปหรือล็อกจอ และหน่วยความจำจำกัด ควรเปิดหน้านี้ค้างไว้ระหว่างทำงาน วิดีโอจะเป็น MP4 ถ้าเบราว์เซอร์รองรับ ไม่เช่นนั้นเป็น WebM</div></section>
+</main>
+<script src="lib/mp4-muxer.js"></script>
+<script src="lib/jszip.min.js"></script>
+<script src="lib/exif-reader.js"></script>
+<script>[['JSZip','https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js'],['ExifReader','https://cdn.jsdelivr.net/npm/exifreader@4.23.3/dist/exif-reader.js'],['Mp4Muxer','https://cdn.jsdelivr.net/npm/mp4-muxer@5.1.3/build/mp4-muxer.js']].forEach(([n,u])=>{if(typeof window[n]==='undefined')document.write('<script src="'+u+'"><\/script>')});</script>
+<script>
+"use strict";
+const $=s=>document.querySelector(s),dk=d=>{const z=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+z(d.getMonth()+1)+'-'+z(d.getDate())};
+const S={roi:[],rd:null,items:[],pick:{},res:{},man:{},crop:null,pause:false,cancel:false,ref:null,cur:null,busy:false};
+const MAXD=/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)?960:1280; // มือถือใช้ขนาดเล็กลงเพื่อกันหน่วยความจำเต็ม
+function prog(p,t){$('#bar').style.width=p+'%';if(t!=null)$('#log').textContent=t}
+function err(t){$('#log').innerHTML='<span class="REJECT">ข้อผิดพลาด: '+t+'</span>'}
+const mk=(w,h)=>{const c=document.createElement('canvas');c.width=w;c.height=h;return c};
+
+/* ---------- นำเข้า ZIP ---------- */
+const drop=$('#drop');
+drop.onclick=()=>$('#zf').click();
+drop.ondragover=e=>{e.preventDefault();drop.classList.add('on')};
+drop.ondragleave=()=>drop.classList.remove('on');
+drop.ondrop=e=>{e.preventDefault();drop.classList.remove('on');importZips([...e.dataTransfer.files])};
+$('#zf').onchange=e=>importZips([...e.target.files]);
+async function importZips(files){
+ const T0=performance.now();prog(2,'กำลังเปิดไฟล์ ZIP…');await new Promise(r=>setTimeout(r,0));
+ if(typeof JSZip==='undefined')return err('โหลด JSZip ไม่สำเร็จ ตรวจสอบอินเทอร์เน็ตแล้วรีเฟรช');
+ for(const f of files){
+  let z;try{z=await JSZip.loadAsync(f);prog(5,'พบไฟล์ใน ZIP แล้ว กำลังอ่านภาพ…')}catch(e){err('ZIP "'+f.name+'" เสียหายหรืออ่านไม่ได้ ลองบีบอัดใหม่');continue}
+  const es=Object.values(z.files).filter(e=>!e.dir&&/\.(jpe?g|png|webp)$/i.test(e.name)&&!/__MACOSX|\/\./.test(e.name));
+  let k=0,bad=0;
+  for(const e of es){
+   prog(100*k++/es.length,'อ่านภาพ '+k+'/'+es.length+' จาก '+f.name+' · '+Math.round((performance.now()-T0)/1000)+' วินาที');await new Promise(r=>setTimeout(r,0));
+   try{
+    const buf=await e.async('arraybuffer');let d=null,info='';
+    try{const t=ExifReader.load(buf.slice(0,131072));const s=t.DateTimeOriginal&&t.DateTimeOriginal.description;
+     if(s){const m=s.match(/(\d+):(\d+):(\d+) (\d+):(\d+):(\d+)/);if(m)d=new Date(+m[1],m[2]-1,+m[3],+m[4],+m[5],+m[6])}
+     info=[t.Make,t.Model,t.ExposureTime,t.FNumber].filter(Boolean).map(x=>x.description).join(' · ')}catch(_){}
+    if(!d){const m=e.name.match(/(20\d{2}|19\d{2})[-_.]?(\d{2})[-_.]?(\d{2})/);d=m?new Date(+m[1],m[2]-1,+m[3],12):e.date}
+    const bl=new Blob([buf]);let bm;try{bm=await createImageBitmap(bl,{imageOrientation:'from-image',resizeWidth:MAXD,resizeQuality:'medium'})}catch(_){bm=await createImageBitmap(bl,{imageOrientation:'from-image'})}
+    const s=Math.min(1,MAXD/Math.max(bm.width,bm.height)),c=mk(Math.round(bm.width*s),Math.round(bm.height*s));
+    c.getContext('2d').drawImage(bm,0,0,c.width,c.height);bm.close&&bm.close();if(!(k%5))await new Promise(r=>setTimeout(r,20));
+    const q=qual(c);S.items.push({name:e.name,date:d,day:dk(d),c,info,...q,w0:0});
+   }catch(x){bad++}
+  }
+  if(bad)err(bad+' ไฟล์ภาพเสียหายถูกข้าม');
+ }
+ S.items.sort((a,b)=>a.date-b.date);markDup();S.res={};S.man={};S.crop=null;
+ S.ref=null;buildDays();if($('#auto').checked&&S.items.length){S.pick[S.items[0].day]=0;buildDays()}
+ prog(100,'นำเข้าแล้ว '+S.items.length+' ภาพ · กำลังบันทึกโครงการ…');await saveItems();prog(100,'นำเข้าแล้ว '+S.items.length+' ภาพ (บันทึกลงเครื่องแล้ว)');
+ if($('#auto').checked&&S.items.length>1){$('#cmp').scrollIntoView({behavior:'smooth'});runAlign(false)}
+}
+/* ---------- คุณภาพภาพ ---------- */
+function qual(c){
+ const w=256,h=Math.max(8,Math.round(c.height*w/c.width)),t=mk(w,h),x=t.getContext('2d',{willReadFrequently:true});
+ x.drawImage(c,0,0,w,h);const d=x.getImageData(0,0,w,h).data,g=new Float32Array(w*h);let m=0;
+ for(let i=0;i<g.length;i++){g[i]=.299*d[4*i]+.587*d[4*i+1]+.114*d[4*i+2];m+=g[i]}m/=g.length;
+ let s=0,s2=0,n=0,ns=0;
+ for(let y=1;y<h-1;y++)for(let X=1;X<w-1;X++){const i=y*w+X,l=4*g[i]-g[i-1]-g[i+1]-g[i-w]-g[i+w];s+=l;s2+=l*l;n++;ns+=Math.abs(g[i-w-1]-2*g[i-w]+g[i-w+1]-2*g[i-1]+4*g[i]-2*g[i+1]+g[i+w-1]-2*g[i+w]+g[i+w+1])}
+ const v=s2/n-(s/n)**2,fl=[];
+ if(m<40)fl.push('มืดเกินไป');if(m>220)fl.push('สว่างเกินไป');if(v<25)fl.push('เบลอมาก');
+ if(c.width*c.height<400000)fl.push('ความละเอียดต่ำ');
+ const nz=Math.sqrt(Math.PI/2)*ns/(6*n);if(nz>8)fl.push('สัญญาณรบกวนสูง (σ≈'+nz.toFixed(1)+')');
+ const th=new Uint8Array(1024);for(let a=0;a<32;a++)for(let b=0;b<32;b++)th[a*32+b]=g[((a*h/32)|0)*w+((b*w/32)|0)];
+ return{score:Math.max(0,Math.round(70*Math.min(1,Math.log10(1+v)/2.7)+30*(1-Math.min(1,Math.abs(m-128)/128))-Math.min(10,nz))),flags:fl,lap:v,mean:m,noise:nz,th};
+}
+/* ---------- รายวัน ---------- */
+function markDup(){
+ for(let k=1;k<S.items.length;k++){const a=S.items[k-1],b=S.items[k];if(!a.th||!b.th)continue;
+  let d=0;for(let i=0;i<1024;i++)d+=Math.abs(a.th[i]-b.th[i]);
+  if(d/1024<1.5){b.dup=true;if(!b.flags.includes('ภาพซ้ำกับภาพก่อนหน้า'))b.flags.push('ภาพซ้ำกับภาพก่อนหน้า')}}
+}
+function groups(){const g={};S.items.forEach((it,i)=>(g[it.day]=g[it.day]||[]).push(i));return g}
+function buildDays(){
+ const g=groups(),keys=Object.keys(g).sort();
+ keys.forEach(k=>{if(!(k in S.pick)||!g[k].includes(S.pick[k]))S.pick[k]=g[k].reduce((a,b)=>S.items[b].score>S.items[a].score?b:a)});
+ const el=$('#days');el.innerHTML='';
+ if(keys.length){
+  let d=new Date(keys[0]+'T12:00'),end=new Date(keys.at(-1)+'T12:00');
+  for(;d<=end;d.setDate(d.getDate()+1)){
+   const k=dk(d),r=document.createElement('div');r.className='day';r.innerHTML='<span>'+k+'</span>';
+   const th=document.createElement('div');th.className='th';
+   if(!g[k])th.innerHTML='<i class="empty">ไม่มีภาพ (ข้ามวันนี้)</i>';
+   else g[k].forEach(i=>{const it=S.items[i],f=document.createElement('figure'),c=mk(100,Math.round(100*it.c.height/it.c.width));
+    c.getContext('2d').drawImage(it.c,0,0,c.width,c.height);f.append(c);
+    f.insertAdjacentHTML('beforeend','<figcaption>'+it.score+'</figcaption>');f.title=it.name+'\n'+it.info+(it.flags.length?'\n⚠ '+it.flags.join(', '):'');
+    if(S.pick[k]===i)f.classList.add('sel');f.onclick=()=>{S.pick[k]=i;buildDays();dbPut('pick',S.pick)};th.append(f)});
+   r.append(th);el.append(r);
+  }
+  $('#refsel').innerHTML=keys.map(k=>'<option>'+k+'</option>').join('');$('#refsel').value=S.ref&&keys.includes(S.ref)?S.ref:keys[0];
+  $('#d0').value=keys[0];$('#d1').value=keys.at(-1);
+ }
+ stats();drawRoi();
+}
+$('#perday').onchange=stats;$('#refsel').onchange=()=>{S.ref=$('#refsel').value};
+function chosen(){const g=groups(),all=$('#perday').value==='n';
+ return Object.keys(g).sort().flatMap(k=>all?g[k].filter(i=>!S.items[i].dup):[S.pick[k]])}
+function stats(){
+ const r=Object.entries(S.res),cnt=s=>r.filter(([,v])=>s.includes(v.st)).length,ch=chosen();
+ $('#stats').innerHTML=[['ภาพนำเข้า',S.items.length],['ผ่านการคัดเลือก',ch.length],['วันที่มีข้อมูล',Object.keys(groups()).length],
+  ['จัดแนวสำเร็จ',cnt(['REF','PASS','WARNING'])],['ต้องตรวจสอบ',cnt(['REVIEW'])],['กู้คืนไม่ได้',cnt(['REJECT'])],
+  ['ความคืบหน้า',ch.length?Math.round(100*r.length/ch.length)+'%':'0%']].map(a=>'<div><b>'+a[1]+'</b><span>'+a[0]+'</span></div>').join('');
+}
+$('#clr').onclick=()=>{if(!confirm('ลบภาพและข้อมูลโครงการทั้งหมดในหน้านี้?'))return;S.items=[];S.pick={};S.res={};S.man={};S.crop=null;S.cur=null;dbClear();buildDays();$('#days').innerHTML='';$('#chips').innerHTML='';$('#out').innerHTML='';prog(0,'ล้างข้อมูลแล้ว')};
+
+
+/* ---------- วาดกรอบล็อกบนภาพอ้างอิง ---------- */
+function drawRoi(){const cv0=$('#roi'),i=S.pick[$('#refsel').value]??chosen()[0];if(!cv0||i==null||!S.items[i])return;
+ const c=S.items[i].c,W=640,H=Math.round(W*c.height/c.width);cv0.width=W;cv0.height=H;const x=cv0.getContext('2d');x.drawImage(c,0,0,W,H);
+ x.lineWidth=3;x.strokeStyle='#ffb347';x.fillStyle='#ffb34733';for(const r of S.rd?[...S.roi,S.rd]:S.roi){x.fillRect(r.x*W,r.y*H,r.w*W,r.h*H);x.strokeRect(r.x*W,r.y*H,r.w*W,r.h*H)}}
+(()=>{const c=$('#roi'),pt=e=>{const b=c.getBoundingClientRect();return[Math.min(1,Math.max(0,(e.clientX-b.left)/b.width)),Math.min(1,Math.max(0,(e.clientY-b.top)/b.height))]},
+ set=(e,a)=>{const[x,y]=pt(e);S.rd={a,x:Math.min(a[0],x),y:Math.min(a[1],y),w:Math.abs(x-a[0]),h:Math.abs(y-a[1])};drawRoi()};
+ c.onpointerdown=e=>{c.setPointerCapture(e.pointerId);set(e,pt(e))};
+ c.onpointermove=e=>{if(S.rd)set(e,S.rd.a)};
+ c.onpointerup=e=>{if(!S.rd)return;const r=S.rd;S.rd=null;if(r.w>.02&&r.h>.02){S.roi.push({x:r.x,y:r.y,w:r.w,h:r.h});$('#rl').checked=true}drawRoi()};
+ $('#rc').onclick=()=>{S.roi=[];S.rd=null;$('#rl').checked=false;drawRoi()}})();
+$('#refsel').addEventListener('change',()=>{S.roi=[];drawRoi()});
+/* ---------- OpenCV ---------- */
+const CV_CDN='https://cdn.jsdelivr.net/npm/@techstark/opencv-js@4.10.0-release.1/dist/opencv.js',CVURL=new URL('lib/opencv.js',location.href).href;
+let cvP;
+function loadCV(){
+ if(cvP)return cvP;
+ return cvP=new Promise((ok,no)=>{
+  const add=u=>{const s=document.createElement('script');s.src=u;
+   s.onerror=()=>{if(u===CVURL)add(CV_CDN);else{cvP=null;no(new Error('โหลด OpenCV.js ไม่สำเร็จ ตรวจสอบอินเทอร์เน็ต'))}};
+   s.onload=()=>{const c=window.cv;if(c&&c.then)c.then(m=>{window.cv=m;ok()});else if(c&&c.Mat)ok();else c.onRuntimeInitialized=ok};
+   document.head.append(s)};
+  add(CVURL);
+ });
+}
+function feats(g,M){const o=new cv.ORB(3000),kp=new cv.KeyPointVector(),de=new cv.Mat(),mk=M||new cv.Mat();o.detectAndCompute(g,mk,kp,de);o.delete();M||mk.delete();return{kp,de}}
+function freeF(F){if(F){F.kp.delete();F.de.delete()}}
+function est(F,T){
+ if(!T||F.de.rows<12||T.de.rows<12)return null;
+ const bf=new cv.BFMatcher(cv.NORM_HAMMING,false),mm=new cv.DMatchVectorVector();bf.knnMatch(F.de,T.de,mm,2);
+ const a=[],b=[];
+ for(let i=0;i<mm.size();i++){const m=mm.get(i);if(m.size()<2)continue;const p=m.get(0),q=m.get(1);
+  if(p.distance<.75*q.distance){const u=F.kp.get(p.queryIdx).pt,v=T.kp.get(p.trainIdx).pt;a.push(u.x,u.y);b.push(v.x,v.y)}}
+ bf.delete();mm.delete();const n=a.length/2;if(n<12)return null;
+ const A=cv.matFromArray(n,1,cv.CV_32FC2,a),B=cv.matFromArray(n,1,cv.CV_32FC2,b),mk=new cv.Mat(),H=cv.findHomography(A,B,cv.RANSAC,4,mk);
+ if(H.empty()){H.delete();A.delete();B.delete();mk.delete();return null}
+ let inl=0,er=0;const ia=[],ib=[],P=new cv.Mat();cv.perspectiveTransform(A,P,H);
+ for(let i=0;i<n;i++)if(mk.data[i]){inl++;er+=Math.hypot(P.data32F[2*i]-B.data32F[2*i],P.data32F[2*i+1]-B.data32F[2*i+1]);ia.push(a[2*i],a[2*i+1]);ib.push(b[2*i],b[2*i+1])}
+ P.delete();A.delete();B.delete();mk.delete();
+ return{H,inl,n,ratio:inl/n,rep:inl?er/inl:99,ia,ib};
+}
+// ปรับ warp matrix (ref->frame) ไปยังสเกล s สำหรับ ECC หลายระดับ
+function scaleW(W,s,inv){const d=W.data32F,f=inv?1/s:s;d[2]*=f;d[5]*=f;d[6]/=f;d[7]/=f}
+function ecc(gF,gR,W,levels){
+ let cc=0;
+ for(const s of levels){
+  const f=new cv.Mat(),r=new cv.Mat(),Ws=W.clone(),m=new cv.Mat();
+  cv.resize(gF,f,new cv.Size(0,0),s,s);cv.resize(gR,r,new cv.Size(0,0),s,s);scaleW(Ws,s,false);
+  try{cc=cv.findTransformECC(r,f,Ws,cv.MOTION_HOMOGRAPHY,new cv.TermCriteria(cv.TermCriteria_COUNT+cv.TermCriteria_EPS,40,1e-4),m,5);
+   scaleW(Ws,s,true);Ws.copyTo(W)}catch(e){}
+  f.delete();r.delete();Ws.delete();m.delete();
+ }
+ return cc;
+}
+
+/* ---------- ล็อกเฉพาะกรอบ (Landmark lock) ---------- */
+let ROI=null;
+function roiMask(w,h,grow){const M=cv.Mat.zeros(h,w,cv.CV_8UC1);for(const r of S.roi){const gx=r.w*w*grow,gy=r.h*h*grow;
+ cv.rectangle(M,new cv.Point(Math.round(Math.max(0,r.x*w-gx)),Math.round(Math.max(0,r.y*h-gy))),new cv.Point(Math.round(Math.min(w-1,(r.x+r.w)*w+gx)),Math.round(Math.min(h-1,(r.y+r.h)*h+gy))),new cv.Scalar(255),-1)}return M}
+function roiBox(w,h){let x0=1,y0=1,x1=0,y1=0;for(const r of S.roi){x0=Math.min(x0,r.x);y0=Math.min(y0,r.y);x1=Math.max(x1,r.x+r.w);y1=Math.max(y1,r.y+r.h)}
+ const x=Math.max(0,Math.floor(x0*w)),y=Math.max(0,Math.floor(y0*h));return{x,y,w:Math.max(16,Math.min(w-x,Math.ceil(x1*w)-x)),h:Math.max(16,Math.min(h-y,Math.ceil(y1*h)-y))}}
+// จับคู่แบบ Similarity (เลื่อน+หมุน+ย่อขยาย) จากจุด inlier ด้วยวิธีกำลังสองน้อยสุด ตัดจุดเพี้ยนแล้วคำนวณซ้ำ
+function simFit(ia,ib){
+ let idx=[...Array(ia.length/2).keys()];if(idx.length<6)return null;let M=null,res=0;
+ for(let pass=0;pass<2;pass++){
+  let pc=[0,0],qc=[0,0];for(const k of idx){pc[0]+=ia[2*k];pc[1]+=ia[2*k+1];qc[0]+=ib[2*k];qc[1]+=ib[2*k+1]}pc=pc.map(v=>v/idx.length);qc=qc.map(v=>v/idx.length);
+  let nu=0,nv=0,dn=0;for(const k of idx){const px=ia[2*k]-pc[0],py=ia[2*k+1]-pc[1],qx=ib[2*k]-qc[0],qy=ib[2*k+1]-qc[1];nu+=px*qx+py*qy;nv+=px*qy-py*qx;dn+=px*px+py*py}
+  if(dn<1e-6)return null;const a=nu/dn,b=nv/dn,tx=qc[0]-(a*pc[0]-b*pc[1]),ty=qc[1]-(b*pc[0]+a*pc[1]);M=[a,-b,tx,b,a,ty,0,0,1];
+  const er=idx.map(k=>Math.hypot(a*ia[2*k]-b*ia[2*k+1]+tx-ib[2*k],b*ia[2*k]+a*ia[2*k+1]+ty-ib[2*k+1]));
+  res=er.reduce((x,y)=>x+y,0)/er.length;const md=[...er].sort((x,y)=>x-y)[er.length>>1],th=Math.max(1.5,2.5*md);
+  const keep=idx.filter((k,j)=>er[j]<=th);if(keep.length<6||keep.length===idx.length)break;idx=keep}
+ const sc=Math.hypot(M[0],M[3]);if(sc<.8||sc>1.25)return null;return{M,rep:res,n:idx.length}}
+function mul3(A,B){const o=new Array(9).fill(0);for(let i=0;i<3;i++)for(let j=0;j<3;j++)for(let k=0;k<3;k++)o[3*i+j]+=A[3*i+k]*B[3*k+j];return o}
+function edgeImg(g,b){const c=g.roi(new cv.Rect(b.x,b.y,b.w,b.h)),f=new cv.Mat(),gx=new cv.Mat(),gy=new cv.Mat(),o=new cv.Mat();
+ c.convertTo(f,cv.CV_32F,1/255);cv.GaussianBlur(f,f,new cv.Size(3,3),0);cv.Sobel(f,gx,cv.CV_32F,1,0,3);cv.Sobel(f,gy,cv.CV_32F,0,1,3);cv.magnitude(gx,gy,o);
+ c.delete();f.delete();gx.delete();gy.delete();return o}
+// ปรับละเอียดเฉพาะในกรอบ: ภาพขอบ (ทนแสงต่างวัน) + ECC แบบ Euclidean; ผลไม่ดีจะไม่ใช้ แล้วคืนค่าความสัมพันธ์ในกรอบ
+function eccRoi(m,R,W){
+ const o=new cv.Mat(),g0=new cv.Mat();cv.warpPerspective(m,o,W,new cv.Size(R.w,R.h),cv.INTER_LINEAR|cv.WARP_INVERSE_MAP,cv.BORDER_CONSTANT,new cv.Scalar(0,0,0,0));
+ cv.cvtColor(o,g0,cv.COLOR_RGBA2GRAY);o.delete();
+ const bb=R.bb||(R.bb=roiBox(R.w,R.h)),t=R.E||(R.E=edgeImg(R.g,bb)),f=edgeImg(g0,bb),A=cv.Mat.eye(2,3,cv.CV_32F),im=new cv.Mat();let cc=0;
+ try{cc=cv.findTransformECC(t,f,A,cv.MOTION_EUCLIDEAN,new cv.TermCriteria(cv.TermCriteria_COUNT+cv.TermCriteria_EPS,60,1e-5),im,5);
+  const a=A.data32F,tx=a[2]-a[0]*bb.x-a[1]*bb.y+bb.x,ty=a[5]-a[3]*bb.x-a[4]*bb.y+bb.y,lim=.04*Math.max(R.w,R.h),th=Math.atan2(a[3],a[0])*180/Math.PI;
+  if(cc>.3&&Math.abs(tx)<lim&&Math.abs(ty)<lim&&Math.abs(th)<3){W.data32F.set(mul3(Array.from(W.data32F),[a[0],a[1],tx,a[3],a[4],ty,0,0,1]))}else cc=Math.min(cc,.29)
+ }catch(e){cc=0}
+ g0.delete();f.delete();A.delete();im.delete();return cc}
+async function alignOne(i,R){
+ const it=S.items[i];let m=cv.imread(it.c),g=new cv.Mat();cv.cvtColor(m,g,cv.COLOR_RGBA2GRAY);
+ const FM=ROI?roiMask(g.cols,g.rows,.35):null;let F=feats(g,FM);FM&&FM.delete();let mode=ROI?'ล็อกกรอบ ORB+RANSAC':'ORB+RANSAC',e=est(F,R.F),W=new cv.Mat(),flags=[...it.flags];
+ if(!e||e.ratio<.3){const e2=est(F,S.prevF);if(e2&&(!e||e2.ratio>e.ratio)){e&&e.H.delete();e=e2;mode='Local(ภาพก่อนหน้า)+ORB'}else e2&&e2.H.delete()}
+ let rotNote=null;
+ if(!e||e.ratio<.15){const m2=new cv.Mat(),g2=new cv.Mat();cv.rotate(m,m2,cv.ROTATE_180);cv.cvtColor(m2,g2,cv.COLOR_RGBA2GRAY);
+  const F2=feats(g2),e3=est(F2,R.F);
+  if(e3&&e3.ratio>.3&&e3.ratio>(e?e.ratio:0)){e&&e.H.delete();e=e3;m.delete();g.delete();freeF(F);m=m2;g=g2;F=F2;rotNote='ภาพกลับด้าน 180° (หมุนแก้ให้อัตโนมัติ ควรตรวจสอบ)';mode='ORB+หมุน180°'}
+  else{e3&&e3.H.delete();m2.delete();g2.delete();freeF(F2)}}
+ if(ROI&&e&&ROI.m==='s'){const sf=simFit(e.ia,e.ib);if(sf){e.H.delete();e.H=cv.matFromArray(3,3,cv.CV_64F,sf.M);e.rep=sf.rep;mode+=' (Similarity)'}}
+ let lv=[.5];
+ if(e){const Wd=new cv.Mat();cv.invert(e.H,Wd,cv.DECOMP_LU);Wd.convertTo(W,cv.CV_32F);Wd.delete()}
+ else{W=cv.Mat.eye(3,3,cv.CV_32F);lv=[.125,.25,.5];mode='ECC หลายสเกล (สำรอง)'}
+ await new Promise(r=>setTimeout(r));
+ const out=new cv.Mat(),corr=(ROI&&e)?eccRoi(m,R,W):ecc(g,R.g,W,lv);
+ if(ROI&&e&&corr<.3)flags.push('ขอบในกรอบยังไม่ตรงพอ ควรตรวจด้วยตา');
+ cv.warpPerspective(m,out,W,new cv.Size(R.w,R.h),cv.INTER_LINEAR|cv.WARP_INVERSE_MAP,cv.BORDER_CONSTANT,new cv.Scalar(0,0,0,0));
+ let ov=0,cnt=0;for(let p=3;p<out.data.length;p+=64){cnt++;if(out.data[p])ov++}ov/=cnt;
+ const ac=mk(R.w,R.h);ac.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(out.data),R.w,R.h),0,0);
+ // ประเมินความเชื่อมั่น (ไม่ใช่การรับประกัน)
+ const ra=e?e.ratio:0,conf=.4*Math.min(1,ra/.5)+.3*Math.max(0,corr)+.3*Math.min(1,ov/.7);
+ const rep=e?e.rep:null;const sw=(it.c.width>it.c.height)!==(R.w>R.h);if(sw)flags.push('ตรวจพบการหมุน 90°/สัดส่วนต่างจากภาพอ้างอิง');
+ if(ov<.4)flags.push('พื้นที่ซ้อนทับต่ำ');if(e&&ra<.25)flags.push('Inlier ต่ำ');
+ let st=conf>=.7&&ov>=.6&&!sw?'PASS':conf>=.5&&ov>=.45?'WARNING':conf>=.3?'REVIEW':'REJECT';
+ if(sw&&st==='PASS')st='REVIEW';if(rotNote){flags.push(rotNote);if(st==='PASS')st='REVIEW'}if(rep!=null&&rep>3){flags.push('Reprojection Error สูง ('+rep.toFixed(1)+' px)');if(st==='PASS')st='WARNING'}
+ // เก็บ feature ของภาพที่จัดแล้วสำหรับ Local alignment (ตรวจกับภาพแรกเสมอ)
+ if(st==='PASS'||st==='WARNING'){const o2=new cv.Mat(),pm=ROI?roiMask(R.w,R.h,0):null;cv.cvtColor(out,o2,cv.COLOR_RGBA2GRAY);freeF(S.prevF);S.prevF=feats(o2,pm);pm&&pm.delete();o2.delete()}
+ S.res[i]={st,conf,rep,inl:e?e.inl:0,ratio:ra,corr,ov,mode,flags,c:ac};saveRes(i);
+ e&&e.H.delete();W.delete();out.delete();m.delete();g.delete();freeF(F);
+}
+
+/* ---------- Web Worker (ทดลอง): ย้าย OpenCV ออกจากเธรดหลัก ถ้าสร้างไม่ได้จะใช้โหมดปกติอัตโนมัติ ---------- */
+const WBODY=`
+let R=null,prevF=null;
+self.onmessage=async e=>{const d=e.data;
+ try{
+  if(d.t==='init'){
+   importScripts(d.url);let c=self.cv;
+   if(c&&c.then)c=await c;else if(!c.Mat)await new Promise(r=>{self.cv.onRuntimeInitialized=r});
+   self.cv=c;
+   const m=cv.matFromImageData({data:new Uint8ClampedArray(d.buf),width:d.w,height:d.h}),g=new cv.Mat();cv.cvtColor(m,g,cv.COLOR_RGBA2GRAY);
+   R={g,F:feats(g),w:d.w,h:d.h};prevF=null;m.delete();postMessage({t:'ready'});return}
+  let m=cv.matFromImageData({data:new Uint8ClampedArray(d.buf),width:d.w,height:d.h}),g=new cv.Mat();cv.cvtColor(m,g,cv.COLOR_RGBA2GRAY);
+  let F=feats(g),mode='ORB+RANSAC',e1=est(F,R.F),flags=d.fl.slice();
+  if(!e1||e1.ratio<.3){const e2=est(F,prevF);if(e2&&(!e1||e2.ratio>e1.ratio)){e1&&e1.H.delete();e1=e2;mode='Local(ภาพก่อนหน้า)+ORB'}else e2&&e2.H.delete()}
+  let rot=null;
+  if(!e1||e1.ratio<.15){const m2=new cv.Mat(),g2=new cv.Mat();cv.rotate(m,m2,cv.ROTATE_180);cv.cvtColor(m2,g2,cv.COLOR_RGBA2GRAY);
+   const F2=feats(g2),e3=est(F2,R.F);
+   if(e3&&e3.ratio>.3&&e3.ratio>(e1?e1.ratio:0)){e1&&e1.H.delete();e1=e3;m.delete();g.delete();freeF(F);m=m2;g=g2;F=F2;rot='ภาพกลับด้าน 180° (หมุนแก้ให้อัตโนมัติ ควรตรวจสอบ)';mode='ORB+หมุน180°'}
+   else{e3&&e3.H.delete();m2.delete();g2.delete();freeF(F2)}}
+  let W=new cv.Mat(),lv=[.5];
+  if(e1){const Wd=new cv.Mat();cv.invert(e1.H,Wd,cv.DECOMP_LU);Wd.convertTo(W,cv.CV_32F);Wd.delete()}else{W=cv.Mat.eye(3,3,cv.CV_32F);lv=[.125,.25,.5];mode='ECC หลายสเกล (สำรอง)'}
+  const corr=ecc(g,R.g,W,lv),out=new cv.Mat();
+  cv.warpPerspective(m,out,W,new cv.Size(R.w,R.h),cv.INTER_LINEAR|cv.WARP_INVERSE_MAP,cv.BORDER_CONSTANT,new cv.Scalar(0,0,0,0));
+  let ov=0,cnt=0;for(let p=3;p<out.data.length;p+=64){cnt++;if(out.data[p])ov++}ov/=cnt;
+  const ra=e1?e1.ratio:0,rep=e1?e1.rep:null,conf=.4*Math.min(1,ra/.5)+.3*Math.max(0,corr)+.3*Math.min(1,ov/.7);
+  const sw=(d.w>d.h)!==(R.w>R.h);if(sw)flags.push('ตรวจพบการหมุน 90°/สัดส่วนต่างจากภาพอ้างอิง');
+  if(ov<.4)flags.push('พื้นที่ซ้อนทับต่ำ');if(e1&&ra<.25)flags.push('Inlier ต่ำ');
+  let st=conf>=.7&&ov>=.6&&!sw?'PASS':conf>=.5&&ov>=.45?'WARNING':conf>=.3?'REVIEW':'REJECT';
+  if(sw&&st==='PASS')st='REVIEW';
+  if(rep!=null&&rep>3){flags.push('Reprojection Error สูง ('+rep.toFixed(1)+' px)');if(st==='PASS')st='WARNING'}
+  if(rot){flags.push(rot);if(st==='PASS')st='REVIEW'}
+  if(st==='PASS'||st==='WARNING'){const o2=new cv.Mat();cv.cvtColor(out,o2,cv.COLOR_RGBA2GRAY);freeF(prevF);prevF=feats(o2);o2.delete()}
+  const buf=new Uint8ClampedArray(out.data).buffer;
+  postMessage({i:d.i,st,conf,rep,inl:e1?e1.inl:0,ratio:ra,corr,ov,mode,flags,buf,w:R.w,h:R.h},[buf]);
+  e1&&e1.H.delete();W.delete();out.delete();m.delete();g.delete();freeF(F);
+ }catch(x){postMessage({t:'err',i:d.i,err:String(x&&x.message||x)})}
+};`;
+const WSRC=()=>[feats,freeF,est,scaleW,ecc].map(f=>f.toString()).join('\n')+'\n'+WBODY;
+function startWorker(rc){return new Promise((ok,no)=>{
+ let w;try{w=new Worker(URL.createObjectURL(new Blob([WSRC()],{type:'text/javascript'})))}catch(e){return no(e)}
+ const pend={},t=setTimeout(()=>{w.terminate();no(new Error('หมดเวลารอ Worker'))},150000);
+ const api={stop:()=>w.terminate(),run:i=>new Promise((o2,n2)=>{pend[i]={o:o2,n:n2};const c=S.items[i].c,id=c.getContext('2d').getImageData(0,0,c.width,c.height);
+   w.postMessage({t:'a',i,buf:id.data.buffer,w:c.width,h:c.height,fl:S.items[i].flags},[id.data.buffer])}).then(d=>{
+   const ac=mk(d.w,d.h);ac.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(d.buf),d.w,d.h),0,0);
+   S.res[d.i]={st:d.st,conf:d.conf,rep:d.rep,inl:d.inl,ratio:d.ratio,corr:d.corr,ov:d.ov,mode:d.mode+' (Worker)',flags:d.flags,c:ac};saveRes(d.i)})};
+ w.onerror=e=>{clearTimeout(t);Object.values(pend).forEach(p=>p.n(new Error('worker error')));no(new Error('Worker ถูกบล็อกหรือล้มเหลว'))};
+ w.onmessage=e=>{const d=e.data;
+  if(d.t==='ready'){clearTimeout(t);ok(api)}
+  else if(d.t==='err'&&d.i==null){clearTimeout(t);no(new Error(d.err))}
+  else{const p=pend[d.i];if(p){delete pend[d.i];d.t==='err'?p.n(new Error(d.err)):p.o(d)}}};
+ const id=rc.getContext('2d').getImageData(0,0,rc.width,rc.height);
+ w.postMessage({t:'init',url:CVURL,buf:id.data.buffer,w:rc.width,h:rc.height},[id.data.buffer]);
+})}
+async function runAlign(only){
+ if(S.busy)return;if(!S.items.length)return err('ยังไม่มีภาพ กรุณานำเข้า ZIP ก่อน');
+ S.busy=true;S.cancel=false;S.pause=false;
+ try{
+  prog(0,'กำลังโหลด OpenCV.js (ครั้งแรกอาจใช้เวลาสักครู่)…');await loadCV();
+  const ch=chosen(),rk=$('#refsel').value||S.items[0].day,ri=S.pick[rk]??ch[0];
+  const rc=S.items[ri].c,rm=cv.imread(rc),rg=new cv.Mat();cv.cvtColor(rm,rg,cv.COLOR_RGBA2GRAY);
+  ROI=$('#rl').checked&&S.roi.length?{m:$('#rm').value}:null;if($('#rl').checked&&!S.roi.length)err('ยังไม่ได้วาดกรอบ จึงจัดแนวทั้งภาพตามปกติ');
+  const rmk=ROI?roiMask(rc.width,rc.height,0):null,R={g:rg,F:feats(rg,rmk),w:rc.width,h:rc.height};rmk&&rmk.delete();
+  let WK=null;if($('#wk').checked&&!ROI){prog(3,'กำลังเริ่ม Web Worker…');WK=await startWorker(rc).catch(e=>{err('ใช้ Worker ไม่ได้ ('+(e.message||e)+') จึงใช้โหมดปกติแทน');return null})}
+  S.res[ri]={st:'REF',conf:1,inl:0,ratio:1,corr:1,ov:1,mode:'ภาพอ้างอิง',flags:[],c:rc};
+  const todo=ch.filter(i=>i!==ri&&(only?(!S.res[i]||S.res[i].st==='REJECT'):true));
+  if(!only){for(const i of ch)if(i!==ri)delete S.res[i];S.prevF=null}
+  let k=0;
+  for(const i of todo){
+   while(S.pause&&!S.cancel)await new Promise(r=>setTimeout(r,200));
+   if(S.cancel){prog(100*k/todo.length,'ยกเลิกแล้ว');break}
+   prog(100*k++/todo.length,'จัดแนว '+k+'/'+todo.length+' · '+S.items[i].day);
+   try{if(WK){try{await WK.run(i)}catch(w){WK.stop();WK=null;S.prevF=null;await alignOne(i,R)}}else await alignOne(i,R)}catch(x){S.res[i]={st:'REJECT',conf:0,inl:0,ratio:0,corr:0,ov:0,mode:'ล้มเหลว',flags:['ประมวลผลล้มเหลว (อาจหน่วยความจำไม่พอ): '+(x.message||x)],c:S.items[i].c}}
+   stats();await new Promise(r=>setTimeout(r));
+  }
+  rm.delete();rg.delete();freeF(R.F);R.E&&R.E.delete();WK&&WK.stop();
+  if(!S.cancel)prog(100,'จัดแนวเสร็จ ตรวจสอบผลด้านล่าง');
+  calcCrop();buildChips();show(S.cur??ri);
+ }catch(x){err(x.message||x)}
+ S.busy=false;stats();
+}
+$('#go').onclick=()=>runAlign(false);$('#rt').onclick=()=>runAlign(true);
+$('#pa').onclick=e=>{S.pause=!S.pause;e.target.textContent=S.pause?'ทำต่อ':'พัก'};$('#ca').onclick=()=>{S.cancel=true};
+
+/* ---------- Auto Crop ---------- */
+function usable(){return Object.keys(S.res).map(Number).filter(i=>S.res[i].st!=='REJECT'&&!S.man[i]?.off).sort((a,b)=>S.items[a].date-S.items[b].date)}
+function calcCrop(){
+ const L=usable();if(!L.length)return;const w0=S.res[L[0]].c.width,h0=S.res[L[0]].c.height,sw=160,sh=Math.round(sw*h0/w0),cov=new Float32Array(sw*sh);
+ for(const i of L){const t=mk(sw,sh),x=t.getContext('2d',{willReadFrequently:true});x.drawImage(S.res[i].c,0,0,sw,sh);const d=x.getImageData(0,0,sw,sh).data;for(let p=0;p<cov.length;p++)if(d[4*p+3]>250)cov[p]++}
+ const mode=$('#cm').value,th=mode==='m'?.8:1,ok=p=>cov[p]>=th*L.length-1e-6;
+ let x0=0,y0=0,x1=sw-1,y1=sh-1;
+ const bad=(a,b,c,d)=>{let n=0,t=0;for(let y=b;y<=d;y++)for(let x=a;x<=c;x++){t++;if(!ok(y*sw+x))n++}return n/t};
+ for(let g=0;g<400&&x0<x1&&y0<y1;g++){
+  const e=[bad(x0,y0,x0,y1),bad(x1,y0,x1,y1),bad(x0,y0,x1,y0),bad(x0,y1,x1,y1)],m=Math.max(...e);
+  if(m<=(mode==='m'?.05:0))break;const k=e.indexOf(m);if(k===0)x0++;else if(k===1)x1--;else if(k===2)y0++;else y1--;
+ }
+ const ins=mode==='c'?2:0,f=w0/sw;
+ S.crop={x:(x0+ins)*f,y:(y0+ins)*f,w:(x1-x0+1-2*ins)*f,h:(y1-y0+1-2*ins)*f};
+ if(S.crop.w<w0*.2)S.crop={x:0,y:0,w:w0,h:h0};
+}
+$('#cm').onchange=()=>{calcCrop();show(S.cur)};
+
+/* ---------- Preview & แก้ไขด้วยมือ ---------- */
+function buildChips(){
+ $('#chips').innerHTML='';
+ Object.keys(S.res).map(Number).sort((a,b)=>S.items[a].date-S.items[b].date).forEach(i=>{
+  const c=document.createElement('span'),r=S.res[i];c.className='chip '+r.st+(i===S.cur?' cur':'');c.textContent=S.items[i].day.slice(5)+' '+r.st;c.onclick=()=>show(i);$('#chips').append(c)});
+}
+function man(i){return S.man[i]||(S.man[i]={dx:0,dy:0,r:0,z:1})}
+function drawF(x,i,W,H,cr,orig){
+ const src=orig?S.res[S.ref_i??0]?.c:S.res[i].c,m=man(i);
+ x.save();x.fillStyle='#000';x.fillRect(0,0,W,H);
+ if(!orig){x.translate(W/2+m.dx*W,H/2+m.dy*H);x.rotate(m.r*Math.PI/180);x.scale(m.z,m.z);x.translate(-W/2,-H/2)}
+ cr?x.drawImage(src,cr.x,cr.y,cr.w,cr.h,0,0,W,H):x.drawImage(src,0,0,W,H);x.restore();
+}
+let blinkT;
+function refIdx(){return S.pick[$('#refsel').value]??Object.keys(S.res).map(Number).find(i=>S.res[i].st==='REF')}
+function show(i){
+ if(i==null||!S.res[i])return;S.cur=i;const r=S.res[i],cv_=$('#cmp'),x=cv_.getContext('2d'),cr=$('#usecrop').checked?S.crop:null;
+ const ri=refIdx(),rc=S.res[ri].c,base=cr||{x:0,y:0,w:rc.width,h:rc.height};cv_.width=960;cv_.height=Math.round(960*base.h/base.w);
+ const W=cv_.width,H=cv_.height,mode=$('#vm').value,v=$('#sl').value/100;clearInterval(blinkT);
+ const A=()=>{x.drawImage(rc,base.x,base.y,base.w,base.h,0,0,W,H)},B=()=>{const t=mk(W,H);drawF(t.getContext('2d'),i,W,H,cr);x.drawImage(t,0,0)};
+ if(mode==='s'){A();x.save();x.beginPath();x.rect(W*v,0,W,H);x.clip();B();x.restore();x.fillStyle='#ffb347';x.fillRect(W*v-1,0,2,H)}
+ else if(mode==='o'){A();x.globalAlpha=v;B();x.globalAlpha=1}
+ else{let f=0;const d=()=>{f?B():A();f^=1};d();blinkT=setInterval(d,450)}
+ $('#info').innerHTML='<b>'+S.items[i].day+'</b> · <span class="'+r.st+'">'+r.st+'</span> · ความเชื่อมั่น '+Math.round(r.conf*100)+'% · วิธี: '+r.mode+'<br>Reproj '+(r.rep==null?'-':r.rep.toFixed(2)+' px')+' · Inlier '+r.inl+' ('+Math.round(r.ratio*100)+'%) · ECC '+r.corr.toFixed(3)+' · ซ้อนทับ '+Math.round(r.ov*100)+'%'+(r.flags.length?'<br>⚠ '+r.flags.join(' · '):'');
+ const m=man(i);$('#mx').value=m.dx;$('#my').value=m.dy;$('#mr').value=m.r;$('#mz').value=m.z;buildChips();
+}
+['vm','sl','usecrop'].forEach(k=>$('#'+k).oninput=()=>show(S.cur));
+[['mx','dx'],['my','dy'],['mr','r'],['mz','z']].forEach(([id,k])=>$('#'+id).oninput=e=>{if(S.cur==null)return;man(S.cur)[k]=+e.target.value;dbPut('man',S.man);show(S.cur)});
+$('#mrst').onclick=()=>{if(S.cur!=null){delete S.man[S.cur];dbPut('man',S.man);show(S.cur)}};
+$('#mrj').onclick=()=>{if(S.cur!=null){man(S.cur).off=!man(S.cur).off;S.res[S.cur].st=man(S.cur).off?'REJECT':'REVIEW';calcCrop();stats();show(S.cur)}};
+
+/* ---------- ส่งออก ---------- */
+function frames(){const a=$('#d0').value,b=$('#d1').value;return usable().filter(i=>S.items[i].day>=a&&S.items[i].day<=b)}
+function outSize(){const H0=+$('#rs').value,cr=S.crop,ar=cr?cr.w/cr.h:16/9;let h=H0,w=Math.round(h*ar);w+=w%2;h+=h%2;return[w,h]}
+async function encWC(L,W,H,fps,hold,draw){
+ if(!window.VideoEncoder||!window.VideoFrame||typeof Mp4Muxer==='undefined')return null;
+ const cfg={codec:'avc1.640034',width:W,height:H,bitrate:+$('#br').value*1e6,framerate:fps};
+ const sup=await VideoEncoder.isConfigSupported(cfg).catch(()=>null);if(!sup||!sup.supported)return null;
+ const mux=new Mp4Muxer.Muxer({target:new Mp4Muxer.ArrayBufferTarget(),video:{codec:'avc',width:W,height:H},fastStart:'in-memory'});
+ let fail=null;const enc=new VideoEncoder({output:(c,m)=>mux.addVideoChunk(c,m),error:e=>fail=e});enc.configure(cfg);
+ const c=mk(W,H),x=c.getContext('2d'),dur=Math.round(1e6*hold/fps);
+ for(let k=0;k<L.length;k++){
+  draw(x,L[k]);const f=new VideoFrame(c,{timestamp:k*dur,duration:dur});enc.encode(f,{keyFrame:k%30===0});f.close();
+  prog(100*k/L.length,'เข้ารหัส (WebCodecs) '+(k+1)+'/'+L.length);if(fail)return null;
+  await new Promise(r=>setTimeout(r,enc.encodeQueueSize>6?20:0));
+ }
+ await enc.flush();if(fail)return null;mux.finalize();return new Blob([mux.target.buffer],{type:'video/mp4'});
+}
+function showVid(b,ext,note){const u=URL.createObjectURL(b);
+ $('#out').innerHTML='<video src="'+u+'" controls playsinline style="width:100%;max-height:50vh;background:#000"></video><div class="row"><a href="'+u+'" download="timelapse.'+ext+'"><button class="p" type="button">ดาวน์โหลด .'+ext+'</button></a><span class="s">'+note+'</span></div>'}
+$('#vid').onclick=async()=>{
+ const L=frames();if(!L.length)return err('ยังไม่มีเฟรมที่จัดแนวแล้ว กรุณาจัดแนวก่อน');
+ const [W,H]=outSize(),fps=+$('#fps').value,hold=+$('#hold').value;
+ const draw=(x,i)=>{drawF(x,i,W,H,S.crop);
+  if($('#sd').checked){x.fillStyle='#000a';x.fillRect(0,H-Math.round(H*.07),W,Math.round(H*.07));x.fillStyle='#ffb347';x.font='bold '+Math.round(H*.04)+'px sans-serif';x.textBaseline='middle';x.fillText(S.items[i].day,H*.02,H-H*.035)}
+  if($('#tt').value){x.fillStyle='#fff';x.font='bold '+Math.round(H*.045)+'px sans-serif';x.textBaseline='top';x.fillText($('#tt').value,H*.02,H*.02)}};
+ try{const b=await encWC(L,W,H,fps,hold,draw);if(b){showVid(b,'mp4','MP4 (H.264) เข้ารหัสด้วย WebCodecs ไม่ต้องรอแบบเรียลไทม์');return prog(100,'สร้างวิดีโอเสร็จ ('+L.length+' เฟรม)')}}catch(e){console.warn('WebCodecs ล้มเหลว ใช้ MediaRecorder แทน',e)}
+ if(!window.MediaRecorder)return err('เบราว์เซอร์นี้ไม่รองรับทั้ง WebCodecs และ MediaRecorder ลองใช้ Safari ใหม่หรือ Chrome');
+ const c=mk(W,H),x=c.getContext('2d');
+ const mt=['video/mp4;codecs=avc1','video/mp4','video/webm;codecs=vp9','video/webm'].find(t=>MediaRecorder.isTypeSupported(t));
+ if(!mt)return err('ไม่พบ Codec ที่รองรับ ลองลดความละเอียดหรือเปลี่ยนเบราว์เซอร์');
+ let rec;try{rec=new MediaRecorder(c.captureStream(fps),{mimeType:mt,videoBitsPerSecond:+$('#br').value*1e6})}catch(e){return err('เริ่มบันทึกไม่ได้: '+e.message)}
+ const ch=[];rec.ondataavailable=e=>e.data.size&&ch.push(e.data);const done=new Promise(r=>rec.onstop=r);rec.start();
+ for(let k=0;k<L.length;k++){draw(x,L[k]);prog(100*k/L.length,'เรนเดอร์วิดีโอ (สำรอง) '+(k+1)+'/'+L.length);await new Promise(r=>setTimeout(r,Math.max(1000*hold/fps,30)))}
+ rec.stop();await done;const ext=mt.includes('mp4')?'mp4':'webm';
+ showVid(new Blob(ch,{type:mt.split(';')[0]}),ext,ext==='webm'?'เบราว์เซอร์นี้ไม่รองรับ MP4 จึงใช้ WebM':'');prog(100,'สร้างวิดีโอเสร็จ ('+L.length+' เฟรม)');
+};
+$('#zip').onclick=async()=>{
+ const L=frames();if(!L.length)return err('ยังไม่มีเฟรมที่จัดแนวแล้ว');
+ const [W,H]=outSize(),z=new JSZip(),c=mk(W,H),x=c.getContext('2d');
+ for(let k=0;k<L.length;k++){drawF(x,L[k],W,H,S.crop);
+  const b=await new Promise(r=>c.toBlob(r,'image/jpeg',.92));z.file(S.items[L[k]].day+'_'+String(k).padStart(4,'0')+'.jpg',b);prog(100*k/L.length,'บีบอัดภาพ '+(k+1)+'/'+L.length)}
+ const b=await z.generateAsync({type:'blob'}),u=URL.createObjectURL(b);
+ $('#out').innerHTML='<a href="'+u+'" download="aligned_frames.zip"><button class="p" type="button">ดาวน์โหลด aligned_frames.zip</button></a>';prog(100,'สร้าง ZIP เสร็จ');
+};
+
+/* ---------- IndexedDB: บันทึกและกู้คืนโครงการ ---------- */
+const dbo=()=>new Promise((ok,no)=>{const q=indexedDB.open('tls',1);q.onupgradeneeded=()=>q.result.createObjectStore('kv');q.onsuccess=()=>ok(q.result);q.onerror=()=>no(q.error)});
+async function tx(m,f){const d=await dbo();return new Promise((ok,no)=>{const t=d.transaction('kv',m),q=f(t.objectStore('kv'));t.oncomplete=()=>ok(q&&q.result);t.onerror=()=>no(t.error)})}
+const dbPut=(k,v)=>tx('readwrite',s=>s.put(v,k)).catch(()=>{}),dbGet=k=>tx('readonly',s=>s.get(k)).catch(()=>null),dbClear=()=>tx('readwrite',s=>s.clear()).catch(()=>{});
+const dbRes=()=>tx('readonly',s=>s.getAll(IDBKeyRange.bound('res:','res:\uffff'))).catch(()=>[]);
+const blobOf=async(c,t,q)=>{const b=await new Promise(r=>c.toBlob(r,t,q));return b?{buf:await b.arrayBuffer(),type:t}:null};
+async function saveItems(){
+ await dbClear();
+ const o=[];for(const it of S.items)o.push({name:it.name,day:it.day,date:+it.date,info:it.info,score:it.score,flags:it.flags,lap:it.lap,mean:it.mean,blob:await blobOf(it.c,'image/jpeg',.9)});
+ await dbPut('items',o);await dbPut('pick',S.pick);
+}
+let sq=Promise.resolve();const saveRes=i=>{sq=sq.then(()=>saveRes1(i)).catch(()=>{})};
+async function saveRes1(i){const r=S.res[i];if(!r||r.st==='REF')return;const{c,...m}=r;dbPut('res:'+i,{i,...m,blob:await blobOf(c,'image/png')})}
+async function restore(){
+ const it=await dbGet('items');if(!it||!it.length)return err('ไม่พบโครงการที่บันทึกไว้ในเครื่องนี้');
+ prog(3,'กำลังกู้คืนโครงการ…');const dec=async o=>{const b=o instanceof Blob?o:new Blob([o.buf],{type:o.type});
+  try{const bm=await createImageBitmap(b),c=mk(bm.width,bm.height);c.getContext('2d').drawImage(bm,0,0);return c}
+  catch(_){const u=URL.createObjectURL(b);try{const im=new Image();im.src=u;await im.decode();const c=mk(im.naturalWidth,im.naturalHeight);c.getContext('2d').drawImage(im,0,0);return c}finally{URL.revokeObjectURL(u)}}};
+ S.items=[];let bad=0;for(const o of it){const{blob,...m}=o;try{S.items.push({...m,date:new Date(o.date),c:await dec(blob)})}catch(_){bad++}await new Promise(r=>setTimeout(r))}
+ if(!S.items.length)return err('อ่านข้อมูลที่บันทึกไว้ไม่ได้ (รูปแบบเก่าหรือเสียหาย) กรุณานำเข้า ZIP ใหม่อีกครั้ง');
+ S.pick=(await dbGet('pick'))||{};S.res={};S.man=(await dbGet('man'))||{};
+ if(!bad)for(const o of await dbRes()){const{blob,i,...m}=o;try{S.res[i]={...m,c:await dec(blob)}}catch(_){}}
+ buildDays();const n=Object.keys(S.res).length;
+ if(n){calcCrop();buildChips();show(+Object.keys(S.res)[0])}
+ prog(100,'กู้คืนแล้ว '+S.items.length+' ภาพ'+(bad?' (ข้ามไฟล์เสีย '+bad+' ภาพ ผลจัดแนวเดิมถูกล้าง ต้องจัดแนวใหม่)':'')+(n?' · จัดแนวไว้แล้ว '+n+' ภาพ กด "ทำต่อ" เพื่อจัดแนวส่วนที่เหลือ':''));
+}
+$('#rs0').onclick=()=>restore().catch(e=>err('กู้คืนไม่สำเร็จ: '+(e.message||e)));
+if(navigator.storage&&navigator.storage.persist)navigator.storage.persist().catch(()=>{});
+dbGet('items').then(v=>{if(v&&v.length){$('#log').textContent='พบโครงการที่บันทึกไว้ กำลังกู้คืนอัตโนมัติ…';restore().catch(e=>err('กู้คืนไม่สำเร็จ: '+(e.message||e)))}});
+
+$('#rdm').onclick=()=>{
+ const t=`# AI Time-lapse Auto Alignment Studio
+
+## วิธีเปิดใช้งาน
+1. เปิดไฟล์ index.html (ชื่อไฟล์ HTML นี้) ด้วย Safari/Chrome หรือเปิดลิงก์ที่แชร์
+2. รันบนเครื่อง: python3 -m http.server 8000 แล้วเปิด http://localhost:8000
+3. ต้องมีอินเทอร์เน็ตเพื่อโหลดไลบรารีจาก CDN (ไม่มีการอัปโหลดภาพ)
+
+## Dependencies (โหลดจาก CDN)
+- JSZip 3.10.1 (cdnjs) - อ่าน/สร้าง ZIP
+- ExifReader 4.23.3 (jsdelivr) - อ่าน EXIF
+- OpenCV.js 4.10 (@techstark/opencv-js, jsdelivr) - ORB, RANSAC Homography, ECC
+- ใช้ออฟไลน์: ดาวน์โหลดไฟล์ทั้งสามมาไว้โฟลเดอร์เดียวกันแล้วแก้ src ในไฟล์ HTML
+
+## ลำดับการทำงาน
+นำเข้า ZIP > เรียงวันตาม EXIF > ให้คะแนนคุณภาพ/ตรวจภาพซ้ำ > เลือกภาพต่อวัน > จัดแนว (ORB+RANSAC > ECC > ตรวจซ้ำกับภาพอ้างอิง) > Auto Crop > ตรวจ/แก้ไขด้วยมือ > ส่งออกวิดีโอหรือ ZIP
+
+## ข้อจำกัด
+- iOS Safari: เมื่อพักแอปหรือล็อกจอ การประมวลผลจะหยุด ไม่รับประกันว่าจะทำต่อ ใช้ปุ่มกู้คืนโครงการ (IndexedDB) แล้วกด "ทำต่อ"
+- Web Worker (ทดลอง, เปิดด้วยช่องติ๊กในขั้นจัดแนว): ย้าย OpenCV ออกจากเธรดหลัก ถ้าสร้างไม่ได้จะใช้โหมดปกติ
+- ภาพถูกย่อให้ด้านยาวไม่เกิน 1280 px เพื่อประหยัดหน่วยความจำ
+- ค่า Confidence เป็นตัวช่วยประเมิน ไม่ใช่การรับประกัน ภาพที่มี Parallax หรือวัตถุเคลื่อนที่ต้องตรวจด้วยตา
+- ใช้การจัดแนวแบบ Projective เท่านั้น ไม่ใช้ Non-rigid warp และไม่สร้างรายละเอียดด้วย Generative AI
+- วิดีโอ: ใช้ WebCodecs + mp4-muxer (H.264 MP4) เป็นหลัก ถ้าไม่รองรับจะสำรองด้วย MediaRecorder แบบเรียลไทม์ (MP4 หรือ WebM)
+`;
+ const u=URL.createObjectURL(new Blob([t],{type:'text/markdown'})),a=document.createElement('a');a.href=u;a.download='README.md';a.click();
+};
+if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
+stats();
+if(navigator.storage&&navigator.storage.estimate)navigator.storage.estimate().then(e=>{$('#log').textContent+=' · พื้นที่จัดเก็บโดยประมาณ '+Math.round((e.quota-e.usage)/1e6)+' MB'}).catch(()=>{});
+</script></body></html>
